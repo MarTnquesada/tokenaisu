@@ -54,6 +54,18 @@ pub fn tokenize(text: &str, language: Language) -> String {
     }
     // Optional aggressive hyphen splitting
     // TODO
+    // Multi-dot tagging
+    let re_new_multi_dot = Regex::new(r"\.([\.]+)").unwrap();
+    tokenized_text = re_new_multi_dot.replace_all(&tokenized_text, " DOTMULTI$1").to_string();
+    let re_dotmulti_left = Regex::new(r"DOTMULTI\.").unwrap();
+    let re_dotmulti_plus_nondot: std::ops::Range<Result<Regex, regex::Error>> = Regex::new(r"DOTMULTI\.([^\.])").unwrap();
+    let re_dotmulti_expand = Regex::new(r"DOTMULTI\.").unwrap();
+    while re_dotmulti_left.is_match(&tokenized_text) {
+        // Replace DOTMULTI. followed by non-dot with DOTDOTMULTI plus that character
+        tokenized_text = re_dotmulti_plus_nondot.replace_all(&tokenized_text, "DOTDOTMULTI $1").to_string();
+        // Replace any remaining DOTMULTI. with DOTDOTMULTI
+        tokenized_text = re_dotmulti_expand.replace_all(&tokenized_text, "DOTDOTMULTI").to_string();
+    }
 
     tokenized_text
 }
