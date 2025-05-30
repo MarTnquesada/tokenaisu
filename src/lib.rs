@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::collections::HashMap;
 
 #[derive(PartialEq, Debug)]
 pub enum Language {
@@ -15,6 +16,11 @@ pub enum Language {
 }
 
 pub fn tokenize(text: &str, language: Language) -> String {
+    // ## This is an example of how the non-breaking prefix data structure looks, but it needs to be implemented ## /
+    let mut nonbreaking_prefix: HashMap<String, i32> = HashMap::new();
+    nonbreaking_prefix.insert("St".to_string(), 1);
+    nonbreaking_prefix.insert("vs".to_string(), 1);
+    // ##  ## /
     // Remove railing newline character
     let mut tokenized_text: String = String::from(text.trim_end_matches('\n'));
     // Add spaces at the beginning and end of the text
@@ -179,6 +185,41 @@ pub fn tokenize(text: &str, language: Language) -> String {
     }
     // Word tokenization
     let words: Vec<&str> = text.split_whitespace().collect();
+    tokenized_text = String::new();
+    let re_period = Regex::new(r"^(\S+)\.$").unwrap();
+    for (i, word) in words.iter().enumerate() {
+        let mut processed_word = word.to_string();
+        if let Some(caps) = re_period.captures(word) {
+            let pre = &caps[1];
+            if i == words.len() - 1 {
+                // Last word: split period
+                processed_word = format!("{} .", pre);
+            } else if (pre.contains('.') && pre.chars().any(|c| c.is_alphabetic()))
+                || (nonbreaking_prefix.get(pre) == Some(&1))
+                || (i < words.len() - 1
+                    && words[i + 1]
+                        .chars()
+                        .next()
+                        .map_or(false, |c| c.is_lowercase()))
+            {
+                // Keep period attached
+            } else if nonbreaking_prefix.get(pre) == Some(&2)
+                && i < words.len() - 1
+                && words[i + 1]
+                    .chars()
+                    .next()
+                    .map_or(false, |c| c.is_ascii_digit())
+            {
+                // Keep period attached for numbered items
+            } else {
+                // Split period
+                processed_word = format!("{} .", pre);
+            }
+        }
+
+        tokenized_text.push_str(&processed_word);
+        tokenized_text.push(' ');
+    }
 
     tokenized_text
 }
