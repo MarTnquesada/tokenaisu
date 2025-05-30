@@ -1,4 +1,4 @@
-use tokenaisu::{tokenize, Language};
+use tokenaisu::{Language, tokenize};
 
 fn main() {
     println!("Hello, world!");
