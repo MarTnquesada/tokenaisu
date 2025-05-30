@@ -15,32 +15,32 @@ pub enum Language {
     So,
 }
 
-pub fn tokenize(text: &str, language: Language) -> String {
-    // ## This is an example of how the non-breaking prefix data structure looks, but it needs to be implemented ## /
-    let mut nonbreaking_prefix: HashMap<String, i32> = HashMap::new();
-    nonbreaking_prefix.insert("St".to_string(), 1);
-    nonbreaking_prefix.insert("vs".to_string(), 1);
-    // ##  ## /
-    // Remove railing newline character
+pub fn tokenize(text: &str, language: Language, no_escaping: bool) -> String {
+    // Remove trailing newline character
     let mut tokenized_text: String = String::from(text.trim_end_matches('\n'));
-    // Add spaces at the beginning and end of the text
-    tokenized_text = format!(" {tokenized_text} ");
-    // Replace all sequences of whitespaces with a single whitespace
+
+    // Replace all sequences of whitespaces with a single whitespace while trimming text
+    // This is done for any type of Unicode space (incl. tabs), so code executed after this is only concerned with strict ASCII spaces
     tokenized_text = tokenized_text
         .split_whitespace()
         .collect::<Vec<&str>>()
         .join(" ");
-    // Remove ASCII characters 0-31 (always works because the first 128 ASCII chars match the first 128 unicode chars)
+
+    // Add spaces at the beginning and end of the text
+    tokenized_text = format!(" {tokenized_text} ");
+
+    // Remove ASCII characters 0-31 (works because the first 128 ASCII chars match the first 128 unicode chars)
     tokenized_text = tokenized_text.chars().filter(|&ch| ch as u8 > 31).collect();
+
     // Capture protected patterns and replace them with unique substitution strings
     // TODO
-    // Replace all sequences of whitespaces with a single whitespace (again)
+
+    // Replace all sequences of whitespaces with a single whitespace and trim the text
     tokenized_text = tokenized_text
         .split_ascii_whitespace()
         .collect::<Vec<&str>>()
         .join(" ");
-    // Removes the starting and ending spaces added previously
-    tokenized_text = tokenized_text.trim_matches(' ').to_owned();
+
     // Separate out all other special characters depending on the language
     if language == Language::Fi || language == Language::Sv {
         // In Finnish and Swedish, the colon can be used inside words as an apostrophe-like character:
@@ -69,8 +69,10 @@ pub fn tokenize(text: &str, language: Language) -> String {
         let re_general = Regex::new(r"([^\p{L}\p{N}\s\.\'\`\,\-])").unwrap();
         tokenized_text = re_general.replace_all(&tokenized_text, " $1 ").to_string();
     }
+
     // Optional aggressive hyphen splitting
     // TODO
+
     // Multi-dot tagging
     let re_new_multi_dot = Regex::new(r"\.([\.]+)").unwrap();
     tokenized_text = re_new_multi_dot
@@ -89,6 +91,7 @@ pub fn tokenize(text: &str, language: Language) -> String {
             .replace_all(&tokenized_text, "DOTDOTMULTI")
             .to_string();
     }
+
     // Separate out "," except if within numbers (5,300)
     let re_comma_after_non_numeric = Regex::new(r"([^\p{N}]),").unwrap();
     tokenized_text = re_comma_after_non_numeric
@@ -98,11 +101,13 @@ pub fn tokenize(text: &str, language: Language) -> String {
     tokenized_text = re_comma_before_non_numeric
         .replace_all(&tokenized_text, " , $1")
         .to_string();
+
     // Separate "," after a number if it's the end of a sentence
     let re_comma_after_number_end_of_sentence = Regex::new(r"([\p{N}]),$").unwrap();
     tokenized_text = re_comma_after_number_end_of_sentence
         .replace_all(&tokenized_text, "$1 ,")
         .to_string();
+
     // Split contractions
     match language {
         Language::En => {
@@ -183,10 +188,16 @@ pub fn tokenize(text: &str, language: Language) -> String {
                 .to_string();
         }
     }
+
     // Word tokenization
-    let words: Vec<&str> = text.split_whitespace().collect();
-    tokenized_text = String::new();
+    let words: Vec<&str> = tokenized_text.split_whitespace().collect();
+    let mut word_tokenized_text = String::new();
     let re_period = Regex::new(r"^(\S+)\.$").unwrap();
+    // ##  TODO This is an example of how the non-breaking prefix data structure looks, but it needs to be implemented ## /
+    let mut nonbreaking_prefix: HashMap<String, i32> = HashMap::new();
+    nonbreaking_prefix.insert("St".to_string(), 1);
+    nonbreaking_prefix.insert("vs".to_string(), 1);
+    // ##  ## /
     for (i, word) in words.iter().enumerate() {
         let mut processed_word = word.to_string();
         if let Some(caps) = re_period.captures(word) {
@@ -216,9 +227,46 @@ pub fn tokenize(text: &str, language: Language) -> String {
                 processed_word = format!("{} .", pre);
             }
         }
+        word_tokenized_text.push_str(&processed_word);
+        word_tokenized_text.push(' ');
+    }
+    tokenized_text = word_tokenized_text.clone();
 
-        tokenized_text.push_str(&processed_word);
-        tokenized_text.push(' ');
+    // Clean up extraneous spaces
+    tokenized_text = tokenized_text
+        .split_ascii_whitespace()
+        .collect::<Vec<&str>>()
+        .join(" ");
+
+    // .' at end of sentence is missed
+    let re_period = Regex::new(r"\.\' ?$").unwrap();
+    tokenized_text = re_period.replace(&tokenized_text, ". ' ").to_string();
+
+    // Restore protected patterns
+    // TODO
+
+    // Restore multi-dots
+    while tokenized_text.contains("DOTDOTMULTI") {
+        tokenized_text = tokenized_text.replace("DOTDOTMULTI", "DOTMULTI.");
+    }
+    tokenized_text = tokenized_text.replace("DOTMULTI", ".");
+
+    // Escape special characters
+    if !no_escaping {
+        tokenized_text = tokenized_text
+            .replace("&", "&amp;") // escape escape
+            .replace("|", "&#124;") // factor separator
+            .replace("<", "&lt;") // xml
+            .replace(">", "&gt;") // xml
+            .replace("'", "&apos;") // xml
+            .replace("\"", "&quot;") // xml
+            .replace("[", "&#91;") // syntax non-terminal
+            .replace("]", "&#93;"); // syntax non-terminal
+    }
+
+    // Ensure final line break
+    if !tokenized_text.ends_with('\n') {
+        tokenized_text.push('\n');
     }
 
     tokenized_text
@@ -233,6 +281,7 @@ mod tests {
         let result = tokenize(
             "This sentence is really simple, so it should not be hard to detokenize.\nThis one is no more difficult, but, hey, it is on a new line.",
             Language::En,
+            false,
         );
         assert_eq!(
             result,
@@ -242,7 +291,11 @@ mod tests {
 
     #[test]
     fn english_double_quotes() {
-        let result = tokenize("This is a somewhat \"less simple\" test.", Language::En);
+        let result = tokenize(
+            "This is a somewhat \"less simple\" test.",
+            Language::En,
+            false,
+        );
         assert_eq!(result, "This is a somewhat \" less simple \" test .");
     }
     // TODO expand further with examples from https://github.com/moses-smt/mosesdecoder/blob/master/regression-testing/run-test-detokenizer.perl
