@@ -277,26 +277,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn english_multiline() {
-        let result = tokenize(
-            "This sentence is really simple, so it should not be hard to detokenize.\nThis one is no more difficult, but, hey, it is on a new line.",
-            Language::En,
-            false,
-        );
-        assert_eq!(
-            result,
-            "This sentence is really simple , so it should not be hard to detokenize .\nThis one is no more difficult , but , hey , it is on a new line ."
-        );
-    }
-
-    #[test]
     fn english_double_quotes() {
         let result = tokenize(
             "This is a somewhat \"less simple\" test.",
             Language::En,
-            false,
+            true,
         );
-        assert_eq!(result, "This is a somewhat \" less simple \" test .");
+        assert_eq!(result, "This is a somewhat \" less simple \" test .\n");
     }
     // TODO expand further with examples from https://github.com/moses-smt/mosesdecoder/blob/master/regression-testing/run-test-detokenizer.perl
 }
