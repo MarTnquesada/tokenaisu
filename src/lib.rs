@@ -285,5 +285,47 @@ mod tests {
         );
         assert_eq!(result, "This is a somewhat \" less simple \" test .\n");
     }
+
+    #[test]
+    fn french_simple() {
+        let result = tokenize("Voici une phrase simple.", Language::Fr, true);
+        assert_eq!(result, "Voici une phrase simple .\n");
+    }
+
+    #[test]
+    fn french_apostrophe() {
+        let result = tokenize("Moi, j'ai une apostrophe.", Language::Fr, true);
+        assert_eq!(result, "Moi , j' ai une apostrophe .\n");
+    }
+
+    #[test]
+    fn french_apostrophe_penultimate() {
+        let result = tokenize("de musique rap issus de l'immigration", Language::Fr, true);
+        assert_eq!(result, "de musique rap issus de l' immigration\n");
+    }
+
+    #[test]
+    fn german_nonascii() {
+        let result = tokenize(
+            "Ich hoffe, daß Sie schöne Ferien hatten.",
+            Language::En,
+            true,
+        );
+        assert_eq!(result, "Ich hoffe , daß Sie schöne Ferien hatten .\n");
+    }
+
+    #[test]
+    fn chinese_simple() {
+        let result = tokenize("这是一个简单的的汉语句子。", Language::En, true);
+        assert_eq!(result, "这 是 一个 简单 的的 汉语 句子 。\n");
+    }
+
+    #[test]
+    fn japanese_simple() {
+        let result = tokenize("どうしょうかな。", Language::En, true);
+        assert_eq!(result, "どう しょ う か な 。\n");
+    }
+
     // TODO expand further with examples from https://github.com/moses-smt/mosesdecoder/blob/master/regression-testing/run-test-detokenizer.perl
+    // (but don't use examples with multi-lines since those are intended for end-to-end tests)
 }
