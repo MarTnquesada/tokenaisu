@@ -1,9 +1,10 @@
 use regex::Regex;
-use std::io::{self, BufRead};
+use std::collections::HashMap;
 use std::path::Path;
-use std::{collections::HashMap, vec};
+use strum_macros;
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, strum_macros::AsRefStr)]
+#[strum(serialize_all = "lowercase")]
 pub enum Language {
     En,
     Es,
@@ -18,22 +19,24 @@ pub enum Language {
 }
 
 fn load_nonbreaking_prefixes(language: Language) -> HashMap<String, u8> {
-    // let mut prefixfile = format!("{}/nonbreaking_prefix.{}", mydir, language);
-    // if !Path::new(&prefixfile).exists() {
-    //     eprintln!(
-    //         "WARNING: No known abbreviations for language '{}', attempting fall-back to English version...",
-    //         language
-    //     );
-    //     prefixfile = format!("{}/nonbreaking_prefix.en", mydir);
-    //     if !Path::new(&prefixfile).exists() {
-    //         return Err(io::Error::new(
-    //             io::ErrorKind::NotFound,
-    //             format!("No abbreviations files found in {}", mydir),
-    //         ));
-    //     }
-    // }
-    // let file = File::open(&prefixfile)?;
-    // let reader = io::BufReader::new(file);
+    // TODO locate actual file from absolute path
+    let mut prefixfile = format!(
+        "nonbreaking_prefixes/nonbreaking_prefix.{}",
+        language.as_ref()
+    );
+    print!("{}", language.as_ref());
+    if !Path::new(&prefixfile).exists() {
+        eprintln!(
+            "WARNING: No known abbreviations for language '{}', attempting fall-back to English version...",
+            language.as_ref()
+        );
+        prefixfile = format!("nonbreaking_prefixes/nonbreaking_prefix.en");
+        if !Path::new(&prefixfile).exists() {
+            // TODO exit
+        }
+    }
+    //let file = File::open(&prefixfile)?;
+    //let reader = io::BufReader::new(file);
     let mut nonbreaking_prefixes: HashMap<String, u8> = HashMap::new();
     // for line in reader.lines() {
     //     let line = line?;
