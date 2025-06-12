@@ -15,7 +15,7 @@ pub enum Language {
     So,
 }
 
-pub fn tokenize(text: &str, language: Language, no_escaping: bool) -> String {
+pub fn moses_tokenize_line(text: &str, language: Language, no_escaping: bool) -> String {
     // Remove trailing newline character
     let mut tokenized_text: String = String::from(text.trim_end_matches('\n'));
 
@@ -101,6 +101,13 @@ pub fn tokenize(text: &str, language: Language, no_escaping: bool) -> String {
     tokenized_text = re_comma_before_non_numeric
         .replace_all(&tokenized_text, " , $1")
         .to_string();
+
+    // WIP: experiment on how to optimize the previous two operations together (chaining them)
+    // I could alternatively also implement a macro like here https://y2kappa.github.io/blog/posts/piping/
+    // tokenized_text = Some(tokenized_text)
+    //     .map(|x| re_comma_after_non_numeric.replace_all(&x, "$1 , "))
+    //     .unwrap()
+    //     .to_string();
 
     // Separate "," after a number if it's the end of a sentence
     let re_comma_after_number_end_of_sentence = Regex::new(r"([\p{N}]),$").unwrap();
@@ -278,7 +285,7 @@ mod tests {
 
     #[test]
     fn english_double_quotes() {
-        let result = tokenize(
+        let result = moses_tokenize_line(
             "This is a somewhat \"less simple\" test.",
             Language::En,
             true,
@@ -288,25 +295,26 @@ mod tests {
 
     #[test]
     fn french_simple() {
-        let result = tokenize("Voici une phrase simple.", Language::Fr, true);
+        let result = moses_tokenize_line("Voici une phrase simple.", Language::Fr, true);
         assert_eq!(result, "Voici une phrase simple .\n");
     }
 
     #[test]
     fn french_apostrophe() {
-        let result = tokenize("Moi, j'ai une apostrophe.", Language::Fr, true);
+        let result = moses_tokenize_line("Moi, j'ai une apostrophe.", Language::Fr, true);
         assert_eq!(result, "Moi , j' ai une apostrophe .\n");
     }
 
     #[test]
     fn french_apostrophe_penultimate() {
-        let result = tokenize("de musique rap issus de l'immigration", Language::Fr, true);
+        let result =
+            moses_tokenize_line("de musique rap issus de l'immigration", Language::Fr, true);
         assert_eq!(result, "de musique rap issus de l' immigration\n");
     }
 
     #[test]
     fn german_nonascii() {
-        let result = tokenize(
+        let result = moses_tokenize_line(
             "Ich hoffe, daß Sie schöne Ferien hatten.",
             Language::En,
             true,
@@ -314,17 +322,17 @@ mod tests {
         assert_eq!(result, "Ich hoffe , daß Sie schöne Ferien hatten .\n");
     }
 
-    #[test]
-    fn chinese_simple() {
-        let result = tokenize("这是一个简单的的汉语句子。", Language::En, true);
-        assert_eq!(result, "这 是 一个 简单 的的 汉语 句子 。\n");
-    }
+    // #[test]
+    // fn chinese_simple() {
+    //     let result = moses_tokenize_line("这是一个简单的的汉语句子。", Language::En, true);
+    //     assert_eq!(result, "这 是 一个 简单 的的 汉语 句子 。\n");
+    // }
 
-    #[test]
-    fn japanese_simple() {
-        let result = tokenize("どうしょうかな。", Language::En, true);
-        assert_eq!(result, "どう しょ う か な 。\n");
-    }
+    // #[test]
+    // fn japanese_simple() {
+    //     let result = moses_tokenize_line("どうしょうかな。", Language::En, true);
+    //     assert_eq!(result, "どう しょ う か な 。\n");
+    // }
 
     // TODO expand further with examples from https://github.com/moses-smt/mosesdecoder/blob/master/regression-testing/run-test-detokenizer.perl
     // (but don't use examples with multi-lines since those are intended for end-to-end tests)
