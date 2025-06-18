@@ -1,61 +1,51 @@
+use crate::nonbreaking_prefixes::{NONBREAKING_PREFIXES, PrefixType};
 use regex::Regex;
 use std::collections::HashMap;
-use std::path::Path;
 use strum_macros;
+mod nonbreaking_prefixes;
 
-#[derive(PartialEq, Debug, strum_macros::AsRefStr)]
+#[derive(Debug, PartialEq, strum_macros::AsRefStr)]
 #[strum(serialize_all = "lowercase")]
 pub enum Language {
+    As,
+    Bn,
+    Ca,
+    Cs,
+    De,
+    El,
     En,
     Es,
+    Et,
     Fi,
-    Sv,
-    Tdt,
-    Ca,
     Fr,
-    It,
     Ga,
+    Gu,
+    Hi,
+    Hu,
+    Is,
+    It,
+    Kn,
+    Lt,
+    Lv,
+    Ml,
+    Mni,
+    Mr,
+    Nl,
+    Or,
+    Pa,
+    Pl,
+    Pt,
+    Ro,
+    Ru,
+    Sk,
+    Sl,
     So,
-}
-
-fn load_nonbreaking_prefixes(language: Language) -> HashMap<String, u8> {
-    // TODO locate actual file from absolute path
-    let mut prefixfile = format!(
-        "nonbreaking_prefixes/nonbreaking_prefix.{}",
-        language.as_ref()
-    );
-    print!("{}", language.as_ref());
-    if !Path::new(&prefixfile).exists() {
-        eprintln!(
-            "WARNING: No known abbreviations for language '{}', attempting fall-back to English version...",
-            language.as_ref()
-        );
-        prefixfile = format!("nonbreaking_prefixes/nonbreaking_prefix.en");
-        if !Path::new(&prefixfile).exists() {
-            // TODO exit
-        }
-    }
-    //let file = File::open(&prefixfile)?;
-    //let reader = io::BufReader::new(file);
-    let mut nonbreaking_prefixes: HashMap<String, u8> = HashMap::new();
-    // for line in reader.lines() {
-    //     let line = line?;
-    //     let trimmed = line.trim();
-    //     if trimmed.is_empty() || trimmed.starts_with('#') {
-    //         continue;
-    //     }
-
-    //     if let Some((key, _)) = trimmed.split_once(" #NUMERIC_ONLY#") {
-    //         nonbreaking_prefixes.insert(key.to_string(), 2);
-    //     } else {
-    //         nonbreaking_prefixes.insert(trimmed.to_string(), 1);
-    //     }
-    // }
-
-    let mut nonbreaking_prefixes: HashMap<String, u8> = HashMap::new();
-    nonbreaking_prefixes.insert("St".to_string(), 1);
-    nonbreaking_prefixes.insert("vs".to_string(), 1);
-    nonbreaking_prefixes
+    Sv,
+    Ta,
+    Tdt,
+    Te,
+    Yue,
+    Zh,
 }
 
 pub fn moses_tokenize_line(
@@ -253,9 +243,6 @@ pub fn moses_tokenize_line(
     let words: Vec<&str> = tokenized_text.split_whitespace().collect();
     let mut word_tokenized_text = String::new();
     let re_period = Regex::new(r"^(\S+)\.$").unwrap();
-    // ##  TODO This is an example of how the non-breaking prefix data structure looks, but it needs to be implemented ## /
-    let nonbreaking_prefixes = load_nonbreaking_prefixes(language);
-    // ##  ## /
     for (i, word) in words.iter().enumerate() {
         let mut processed_word = word.to_string();
         if let Some(caps) = re_period.captures(word) {
@@ -264,7 +251,10 @@ pub fn moses_tokenize_line(
                 // Last word: split period
                 processed_word = format!("{} .", pre);
             } else if (pre.contains('.') && pre.chars().any(|c| c.is_alphabetic()))
-                || (nonbreaking_prefixes.get(pre) == Some(&1))
+                || (NONBREAKING_PREFIXES
+                    .get(language.as_ref())
+                    .and_then(|h| h.get(pre))
+                    == Some(&PrefixType::Always))
                 || (i < words.len() - 1
                     && words[i + 1]
                         .chars()
@@ -272,7 +262,10 @@ pub fn moses_tokenize_line(
                         .map_or(false, |c| c.is_lowercase()))
             {
                 // Keep period attached
-            } else if nonbreaking_prefixes.get(pre) == Some(&2)
+            } else if NONBREAKING_PREFIXES
+                .get(language.as_ref())
+                .and_then(|h| h.get(pre))
+                == Some(&PrefixType::NumericOnly)
                 && i < words.len() - 1
                 && words[i + 1]
                     .chars()

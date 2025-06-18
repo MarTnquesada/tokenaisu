@@ -1,7 +1,13 @@
 [package]
 name = "tokenaisu"
 version = "0.1.0"
+authors = ["Martín Quesada Zaragoza"]
+description = "A bundle of different tokenizer implementations (namely Moses) written in Rust"
 edition = "2024"
+readme = "README.md"
+repository = "https://github.com/MarTnquesada/tokenaisu"
+license = "LGPL-2.1-or-later"
+keywords = ["tokenizer", "moses"]
 
 [dependencies]
 regex = "1.11.1"
