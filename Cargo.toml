@@ -10,6 +10,7 @@ license = "LGPL-2.1-or-later"
 keywords = ["tokenizer", "moses"]
 
 [dependencies]
+clap = { version = "4.5.40", features = ["derive"] }
 regex = "1.11.1"
 strum = "0.27"
 strum_macros = "0.27"

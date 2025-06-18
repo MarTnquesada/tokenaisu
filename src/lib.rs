@@ -1,10 +1,11 @@
 use crate::nonbreaking_prefixes::{NONBREAKING_PREFIXES, PrefixType};
 use regex::Regex;
 use std::collections::HashMap;
+use std::fs;
 use strum_macros;
 mod nonbreaking_prefixes;
 
-#[derive(Debug, PartialEq, strum_macros::AsRefStr)]
+#[derive(Debug, PartialEq, strum_macros::AsRefStr, Clone)]
 #[strum(serialize_all = "lowercase")]
 pub enum Language {
     As,
@@ -48,11 +49,51 @@ pub enum Language {
     Zh,
 }
 
+pub fn moses_tokenize_file(
+    input_file_path: &str,
+    output_file_path: &str,
+    language: Language,
+    no_escaping: bool,
+    aggresive_hyphen_splitting: bool,
+    protected_patterns: &[&str],
+) -> Result<(), std::io::Error> {
+    let contents = fs::read_to_string(input_file_path)?;
+    let tokenized_contents = moses_tokenize(
+        &contents,
+        language,
+        no_escaping,
+        aggresive_hyphen_splitting,
+        protected_patterns,
+    );
+    fs::write(output_file_path, tokenized_contents)
+}
+
+pub fn moses_tokenize(
+    text: &str,
+    language: Language,
+    no_escaping: bool,
+    aggresive_hyphen_splitting: bool,
+    protected_patterns: &[&str],
+) -> String {
+    text.lines()
+        .map(|line| {
+            moses_tokenize_line(
+                line,
+                language.clone(),
+                no_escaping,
+                aggresive_hyphen_splitting,
+                protected_patterns,
+            )
+        })
+        .collect::<String>()
+}
+
 pub fn moses_tokenize_line(
     text: &str,
     language: Language,
     no_escaping: bool,
-    protected_patterns: Vec<&str>,
+    aggresive_hyphen_splitting: bool,
+    protected_patterns: &[&str],
 ) -> String {
     let mut tokenized_text = text
         // Remove trailing newline character
@@ -79,12 +120,10 @@ pub fn moses_tokenize_line(
             .replace_all(&text, |caps: &regex::Captures| {
                 let substitution = format!("THISISPROTECTED{:03}", found_protected_patterns.len());
                 found_protected_patterns.insert(substitution.clone(), caps[0].to_owned());
-                print!("{}, {}", &substitution, &caps[0]);
                 substitution
             })
             .to_string();
     }
-    print!("{}", &tokenized_text);
     // After substituting protected patterns, replace all sequences of whitespaces with a single whitespace and trim the text
     tokenized_text = tokenized_text
         .split_ascii_whitespace()
@@ -121,7 +160,13 @@ pub fn moses_tokenize_line(
     }
 
     // Optional aggressive hyphen splitting
-    // TODO
+    if aggresive_hyphen_splitting {
+        let re_aggressive_hyphen_splitting =
+            Regex::new(r"([\p{L}\p{N}])-(?=[\p{L}\p{N}])").unwrap();
+        tokenized_text = re_aggressive_hyphen_splitting
+            .replace_all(&tokenized_text, "$1 @-@ ")
+            .to_string();
+    }
 
     // Multi-dot tagging
     let re_new_multi_dot = Regex::new(r"\.([\.]+)").unwrap();
@@ -336,20 +381,23 @@ mod tests {
             "This is a somewhat \"less simple\" test.",
             Language::En,
             true,
-            vec![],
+            false,
+            &[],
         );
         assert_eq!(result, "This is a somewhat \" less simple \" test .\n");
     }
 
     #[test]
     fn french_simple() {
-        let result = moses_tokenize_line("Voici une phrase simple.", Language::Fr, true, vec![]);
+        let result =
+            moses_tokenize_line("Voici une phrase simple.", Language::Fr, true, false, &[]);
         assert_eq!(result, "Voici une phrase simple .\n");
     }
 
     #[test]
     fn french_apostrophe() {
-        let result = moses_tokenize_line("Moi, j'ai une apostrophe.", Language::Fr, true, vec![]);
+        let result =
+            moses_tokenize_line("Moi, j'ai une apostrophe.", Language::Fr, true, false, &[]);
         assert_eq!(result, "Moi , j' ai une apostrophe .\n");
     }
 
@@ -359,7 +407,8 @@ mod tests {
             "de musique rap issus de l'immigration",
             Language::Fr,
             true,
-            vec![],
+            false,
+            &[],
         );
         assert_eq!(result, "de musique rap issus de l' immigration\n");
     }
@@ -370,36 +419,43 @@ mod tests {
             "Ich hoffe, daß Sie schöne Ferien hatten.",
             Language::En,
             true,
-            vec![],
+            false,
+            &[],
         );
         assert_eq!(result, "Ich hoffe , daß Sie schöne Ferien hatten .\n");
     }
 
-    // #[test]
-    // fn chinese_simple() {
-    //     let result = moses_tokenize_line("这是一个简单的的汉语句子。", Language::En, true, vec![]);
-    //     assert_eq!(result, "这 是 一个 简单 的的 汉语 句子 。\n");
-    // }
+    #[test]
+    fn chinese_simple() {
+        let result =
+            moses_tokenize_line("这是一个简单的的汉语句子。", Language::En, true, false, &[]);
+        assert_eq!(result, "这 是 一个 简单 的的 汉语 句子 。\n");
+    }
 
-    // #[test]
-    // fn japanese_simple() {
-    //     let result = moses_tokenize_line("どうしょうかな。", Language::En, true, vec![]);
-    //     assert_eq!(result, "どう しょ う か な 。\n");
-    // }
+    #[test]
+    fn japanese_simple() {
+        let result = moses_tokenize_line("どうしょうかな。", Language::En, true, false, &[]);
+        assert_eq!(result, "どう しょ う か な 。\n");
+    }
 
     #[test]
     fn protected_patterns() {
         // In English, these would normally be contractions that are separated by default
         let text = "Some text containing the protected pattern $'$ and /'/.";
 
-        let result_without_protected = moses_tokenize_line(text, Language::En, true, vec![]);
+        let result_without_protected = moses_tokenize_line(text, Language::En, true, false, &[]);
         assert_eq!(
             result_without_protected,
             "Some text containing the protected pattern $ ' $ and / ' / .\n"
         );
 
-        let result_with_protected =
-            moses_tokenize_line(text, Language::En, true, vec![r"([^\p{L}])[']([^\p{L}])"]);
+        let result_with_protected = moses_tokenize_line(
+            text,
+            Language::En,
+            true,
+            false,
+            &[r"([^\p{L}])[']([^\p{L}])"],
+        );
         assert_eq!(
             result_with_protected,
             "Some text containing the protected pattern $'$ and /'/ .\n"

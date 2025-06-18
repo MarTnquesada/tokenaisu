@@ -1,9 +1,29 @@
-use tokenaisu::{Language, moses_tokenize_line};
+use clap::Parser;
+use std::process;
+use tokenaisu::{Language, moses_tokenize_file};
+
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[arg(short, long)]
+    input_file_path: String,
+
+    #[arg(short, long)]
+    output_file_path: String,
+}
 
 fn main() {
-    println!("Hello, world!");
-    println!(
-        "{}",
-        moses_tokenize_line("Hello, world!", Language::En, true, vec![])
-    );
+    let args = Args::parse();
+
+    if let Err(e) = moses_tokenize_file(
+        &args.input_file_path,
+        &args.output_file_path,
+        Language::En,
+        true,
+        false,
+        &[],
+    ) {
+        println!("Application error: {e}");
+        process::exit(1);
+    }
 }
