@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use strum_macros;
 mod nonbreaking_prefixes;
+use std::sync::LazyLock;
 
 #[derive(Debug, PartialEq, strum_macros::AsRefStr, Clone)]
 #[strum(serialize_all = "lowercase")]
@@ -114,6 +115,7 @@ pub fn moses_tokenize_line(
     // Capture protected patterns and replace them with unique substitution strings
     let mut found_protected_patterns: HashMap<String, String> = HashMap::new();
     for pattern in protected_patterns {
+        // TODO these patterns will be the same for each call to this function from moses_tokenize(), so they should be pre-calculated there (since they cant be made static here)
         let re_pattern = Regex::new(pattern).unwrap();
         tokenized_text = re_pattern
             .replace_all(&text, |caps: &regex::Captures| {
@@ -133,77 +135,90 @@ pub fn moses_tokenize_line(
     match language {
         Language::Fi | Language::Sv => {
             // In Finnish and Swedish, the colon can be used inside words as an apostrophe-like character:
-            let re_general = Regex::new(r"([^\p{L}\p{N}\s\.\:\'\`\,\-])").unwrap();
-            tokenized_text = re_general.replace_all(&tokenized_text, " $1 ").to_string();
+            // TODO (applies for all LazyLock regexes) this has some overhead when multithreading because of the read access, cloning the regexes for each thread is technically faster
+            static RE_GENERAL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}\s\.\:\'\`\,\-])").unwrap());
+            tokenized_text = RE_GENERAL.replace_all(&tokenized_text, " $1 ").to_string();
             // If a colon is not immediately followed by lower-case characters, separate it out anyway
-            let re_colon = Regex::new(r"(:)(?=$|[^\p{Ll}])").unwrap();
-            tokenized_text = re_colon.replace_all(&tokenized_text, " $1 ").to_string();
+            static RE_COLON: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(:)(?=$|[^\p{Ll}])").unwrap());
+            tokenized_text = RE_COLON.replace_all(&tokenized_text, " $1 ").to_string();
         }
         Language::Tdt => {
             // # In Tetun, the apostrophe can be used inside words as an apostrophe-like character:
-            let re_general = Regex::new(r"([^\p{L}\p{N}\s\.\'\`\,\-])").unwrap();
-            tokenized_text = re_general.replace_all(&tokenized_text, " $1 ").to_string();
+            static RE_GENERAL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}\s\.\'\`\,\-])").unwrap());
+            tokenized_text = RE_GENERAL.replace_all(&tokenized_text, " $1 ").to_string();
             // If an apostrophe is not immediately followed by lower-case characters, separate it out anyway
-            let re_apostrophe = Regex::new(r"(')(?=$|[^\p{Ll}])").unwrap();
-            tokenized_text = re_apostrophe
+            static RE_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(')(?=$|[^\p{Ll}])").unwrap());
+            tokenized_text = RE_APOSTROPHE
                 .replace_all(&tokenized_text, " $1 ")
                 .to_string();
         }
         Language::Ca => {
             // In Catalan, the middle dot can be used inside words:
-            let re_general = Regex::new(r"([^\p{L}\p{N}\s\.\u{00B7}'\`\,\-])").unwrap();
-            tokenized_text = re_general.replace_all(&tokenized_text, " $1 ").to_string();
+            static RE_GENERAL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}\s\.\u{00B7}'\`\,\-])").unwrap());
+            tokenized_text = RE_GENERAL.replace_all(&tokenized_text, " $1 ").to_string();
             // If a middot is not immediately followed by lower-case characters, separate it out anywa
-            let re_middot = Regex::new(r"(\u{00B7})(?=$|[^\p{Ll}])").unwrap();
-            tokenized_text = re_middot.replace_all(&tokenized_text, " $1 ").to_string();
+            static RE_MIDDOT: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"(\u{00B7})(?=$|[^\p{Ll}])").unwrap());
+            tokenized_text = RE_MIDDOT.replace_all(&tokenized_text, " $1 ").to_string();
         }
         _ => {
-            let re_general = Regex::new(r"([^\p{L}\p{N}\s\.\'\`\,\-])").unwrap();
-            tokenized_text = re_general.replace_all(&tokenized_text, " $1 ").to_string();
+            static RE_GENERAL: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}\s\.\'\`\,\-])").unwrap());
+            tokenized_text = RE_GENERAL.replace_all(&tokenized_text, " $1 ").to_string();
         }
     }
 
     // Optional aggressive hyphen splitting
     if aggresive_hyphen_splitting {
-        let re_aggressive_hyphen_splitting =
-            Regex::new(r"([\p{L}\p{N}])-(?=[\p{L}\p{N}])").unwrap();
-        tokenized_text = re_aggressive_hyphen_splitting
+        static RE_AGGRESSIVE_HYPHEN_SPLITTING: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"([\p{L}\p{N}])-(?=[\p{L}\p{N}])").unwrap());
+        tokenized_text = RE_AGGRESSIVE_HYPHEN_SPLITTING
             .replace_all(&tokenized_text, "$1 @-@ ")
             .to_string();
     }
 
     // Multi-dot tagging
-    let re_new_multi_dot = Regex::new(r"\.([\.]+)").unwrap();
-    tokenized_text = re_new_multi_dot
+    static RE_NEW_MULTI_DOT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.([\.]+)").unwrap());
+    tokenized_text = RE_NEW_MULTI_DOT
         .replace_all(&tokenized_text, " DOTMULTI$1")
         .to_string();
-    let re_dotmulti_left = Regex::new(r"DOTMULTI\.").unwrap();
-    let re_dotmulti_plus_nondot = Regex::new(r"DOTMULTI\.([^\.])").unwrap();
-    let re_dotmulti_expand = Regex::new(r"DOTMULTI\.").unwrap();
-    while re_dotmulti_left.is_match(&tokenized_text) {
+    static RE_DOTMULTI_LEFT: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"DOTMULTI\.").unwrap());
+    static RE_DOTMULTI_PLUS_NONDOT: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"DOTMULTI\.([^\.])").unwrap());
+    static RE_DOTMULTI_EXPAND: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"DOTMULTI\.").unwrap());
+    while RE_DOTMULTI_LEFT.is_match(&tokenized_text) {
         // Replace DOTMULTI. followed by non-dot with DOTDOTMULTI plus that character
-        tokenized_text = re_dotmulti_plus_nondot
+        tokenized_text = RE_DOTMULTI_PLUS_NONDOT
             .replace_all(&tokenized_text, "DOTDOTMULTI $1")
             .to_string();
         // Replace any remaining DOTMULTI. with DOTDOTMULTI
-        tokenized_text = re_dotmulti_expand
+        tokenized_text = RE_DOTMULTI_EXPAND
             .replace_all(&tokenized_text, "DOTDOTMULTI")
             .to_string();
     }
 
     // Separate out "," except if within numbers (5,300)
-    let re_comma_after_non_numeric = Regex::new(r"([^\p{N}]),").unwrap();
-    tokenized_text = re_comma_after_non_numeric
+    static RE_COMMA_AFTER_NON_NUMERIC: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"([^\p{N}]),").unwrap());
+    tokenized_text = RE_COMMA_AFTER_NON_NUMERIC
         .replace_all(&tokenized_text, "$1 , ")
         .to_string();
-    let re_comma_before_non_numeric = Regex::new(r",([^\p{N}])").unwrap();
-    tokenized_text = re_comma_before_non_numeric
+    static RE_COMMA_BEFORE_NON_NUMERIC: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r",([^\p{N}])").unwrap());
+    tokenized_text = RE_COMMA_BEFORE_NON_NUMERIC
         .replace_all(&tokenized_text, " , $1")
         .to_string();
 
     // Separate "," after a number if it's the end of a sentence
-    let re_comma_after_number_end_of_sentence = Regex::new(r"([\p{N}]),$").unwrap();
-    tokenized_text = re_comma_after_number_end_of_sentence
+    static RE_COMMA_AFTER_NUMBER_END_OF_SENTENCE: LazyLock<Regex> =
+        LazyLock::new(|| Regex::new(r"([\p{N}]),$").unwrap());
+    tokenized_text = RE_COMMA_AFTER_NUMBER_END_OF_SENTENCE
         .replace_all(&tokenized_text, "$1 ,")
         .to_string();
 
@@ -212,77 +227,90 @@ pub fn moses_tokenize_line(
         Language::En => {
             // Split contractions right
             // Non-alpha + apostrophe + non-alpha -> add spaces around apostrophe
-            let re_space_around_aphostrophe = Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_around_aphostrophe
+            static RE_SPACE_AROUND_APHOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AROUND_APHOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Non-alpha/non-numeric + apostrophe + alpha -> space before apostrophe
-            let re_space_before_aphostrophe = Regex::new(r"([^\p{L}\p{N}])[']([\p{L}])").unwrap();
-            tokenized_text = re_space_before_aphostrophe
+            static RE_SPACE_BEFORE_APHOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}])[']([\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_BEFORE_APHOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Alpha + apostrophe + non-alpha -> space after apostrophe
-            let re_space_after_aphostrophe = Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_after_aphostrophe
+            static RE_SPACE_AFTER_APHOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AFTER_APHOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Alpha + apostrophe + alpha -> space before apostrophe (e.g., "don't" -> "don ' t")
-            let re_space_before_aphostrophe_alpha = Regex::new(r"([\p{L}])[']([\p{L}])").unwrap();
-            tokenized_text = re_space_before_aphostrophe_alpha
+            static RE_SPACE_BEFORE_APHOSTROPHE_ALPHA: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{L}])[']([\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_BEFORE_APHOSTROPHE_ALPHA
                 .replace_all(&tokenized_text, "$1 '$2")
                 .to_string();
 
             // Special case for "1990's" - numeric + apostrophe + 's'
-            let re_numeric_apostrophe = Regex::new(r"([\p{N}])[']([s])").unwrap();
-            tokenized_text = re_numeric_apostrophe
+            static RE_NUMERIC_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{N}])[']([s])").unwrap());
+            tokenized_text = RE_NUMERIC_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 '$2")
                 .to_string();
         }
         Language::Fr | Language::It | Language::Ga | Language::Ca => {
             // Split contractions left
             // Non-alpha + apostrophe + non-alpha -> add spaces around apostrophe
-            let re_space_around_apostrophe = Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_around_apostrophe
+            static RE_SPACE_AROUND_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AROUND_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Non-alpha + apostrophe + alpha -> space before apostrophe
-            let re_space_before_apostrophe = Regex::new(r"([^\p{L}])[']([\p{L}])").unwrap();
-            tokenized_text = re_space_before_apostrophe
+            static RE_SPACE_BEFORE_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}])[']([\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_BEFORE_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Alpha + apostrophe + non-alpha -> space after apostrophe
-            let re_space_after_apostrophe = Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_after_apostrophe
+            static RE_SPACE_AFTER_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AFTER_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Alpha + apostrophe + alpha -> space after apostrophe (e.g., "l'eau" -> "l' eau")
-            let re_space_before_aphostrophe_alpha = Regex::new(r"([\p{L}])[']([\p{L}])").unwrap();
-            tokenized_text = re_space_before_aphostrophe_alpha
+            static RE_SPACE_BEFORE_APHOSTROPHE_ALPHA: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{L}])[']([\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_BEFORE_APHOSTROPHE_ALPHA
                 .replace_all(&tokenized_text, "$1' $2")
                 .to_string();
         }
         Language::So | Language::Tdt => {
             // Don't split glottals (no alpha + apostrophe + alpha rule)
             // Non-alpha + apostrophe + non-alpha -> add spaces around apostrophe
-            let re_space_around_apostrophe = Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_around_apostrophe
+            static RE_SPACE_AROUND_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AROUND_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Non-alpha + apostrophe + alpha -> space before apostrophe
-            let re_space_before_apostrophe = Regex::new(r"([^\p{L}])[']([\p{L}])").unwrap();
-            tokenized_text = re_space_before_apostrophe
+            static RE_SPACE_BEFORE_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([^\p{L}])[']([\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_BEFORE_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
             // Alpha + apostrophe + non-alpha -> space after apostrophe
-            let re_space_afer_apostrophe = Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap();
-            tokenized_text = re_space_afer_apostrophe
+            static RE_SPACE_AFER_APOSTROPHE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"([\p{L}])[']([^\p{L}])").unwrap());
+            tokenized_text = RE_SPACE_AFER_APOSTROPHE
                 .replace_all(&tokenized_text, "$1 ' $2")
                 .to_string();
         }
         _ => {
             // Default: add spaces around all apostrophes
-            let re_apostrophe_space = Regex::new(r"'").unwrap();
-            tokenized_text = re_apostrophe_space
+            static RE_APOSTROPHE_SPACE: LazyLock<Regex> =
+                LazyLock::new(|| Regex::new(r"'").unwrap());
+            tokenized_text = RE_APOSTROPHE_SPACE
                 .replace_all(&tokenized_text, " ' ")
                 .to_string();
         }
@@ -291,10 +319,10 @@ pub fn moses_tokenize_line(
     // Word tokenization
     let words: Vec<&str> = tokenized_text.split_whitespace().collect();
     let mut word_tokenized_text: String = String::new();
-    let re_period = Regex::new(r"^(\S+)\.$").unwrap();
+    static RE_PERIOD_CAPTURE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\S+)\.$").unwrap());
     for (i, word) in words.iter().enumerate() {
         let mut processed_word = word.to_string();
-        if let Some(caps) = re_period.captures(word) {
+        if let Some(caps) = RE_PERIOD_CAPTURE.captures(word) {
             let pre = &caps[1];
             if i == words.len() - 1 {
                 // Last word: split period
@@ -339,8 +367,8 @@ pub fn moses_tokenize_line(
         .join(" ");
 
     // .' at end of sentence is missed
-    let re_period = Regex::new(r"\.\' ?$").unwrap();
-    tokenized_text = re_period.replace(&tokenized_text, ". ' ").to_string();
+    static RE_PERIOD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\.\' ?$").unwrap());
+    tokenized_text = RE_PERIOD.replace(&tokenized_text, ". ' ").to_string();
 
     // Restore protected patterns
     // TODO could use some optimization
