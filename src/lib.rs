@@ -76,6 +76,10 @@ pub fn moses_tokenize(
     aggresive_hyphen_splitting: bool,
     protected_patterns: &[&str],
 ) -> String {
+    let protected_patterns_regexes: Vec<Regex> = protected_patterns
+        .iter()
+        .map(|t| Regex::new(t).unwrap())
+        .collect();
     text.lines()
         .map(|line| {
             moses_tokenize_line(
@@ -83,7 +87,7 @@ pub fn moses_tokenize(
                 language.clone(),
                 no_escaping,
                 aggresive_hyphen_splitting,
-                protected_patterns,
+                &protected_patterns_regexes,
             )
         })
         .collect::<String>()
@@ -94,7 +98,7 @@ pub fn moses_tokenize_line(
     language: Language,
     no_escaping: bool,
     aggresive_hyphen_splitting: bool,
-    protected_patterns: &[&str],
+    protected_patterns: &Vec<Regex>,
 ) -> String {
     let mut tokenized_text = text
         // Remove trailing newline character
@@ -114,9 +118,8 @@ pub fn moses_tokenize_line(
 
     // Capture protected patterns and replace them with unique substitution strings
     let mut found_protected_patterns: HashMap<String, String> = HashMap::new();
-    for pattern in protected_patterns {
+    for re_pattern in protected_patterns {
         // TODO these patterns will be the same for each call to this function from moses_tokenize(), so they should be pre-calculated there (since they cant be made static here)
-        let re_pattern = Regex::new(pattern).unwrap();
         tokenized_text = re_pattern
             .replace_all(&text, |caps: &regex::Captures| {
                 let substitution = format!("THISISPROTECTED{:03}", found_protected_patterns.len());
@@ -414,22 +417,32 @@ mod tests {
             Language::En,
             true,
             false,
-            &[],
+            &vec![],
         );
         assert_eq!(result, "This is a somewhat \" less simple \" test .\n");
     }
 
     #[test]
     fn french_simple() {
-        let result =
-            moses_tokenize_line("Voici une phrase simple.", Language::Fr, true, false, &[]);
+        let result = moses_tokenize_line(
+            "Voici une phrase simple.",
+            Language::Fr,
+            true,
+            false,
+            &vec![],
+        );
         assert_eq!(result, "Voici une phrase simple .\n");
     }
 
     #[test]
     fn french_apostrophe() {
-        let result =
-            moses_tokenize_line("Moi, j'ai une apostrophe.", Language::Fr, true, false, &[]);
+        let result = moses_tokenize_line(
+            "Moi, j'ai une apostrophe.",
+            Language::Fr,
+            true,
+            false,
+            &vec![],
+        );
         assert_eq!(result, "Moi , j' ai une apostrophe .\n");
     }
 
@@ -440,7 +453,7 @@ mod tests {
             Language::Fr,
             true,
             false,
-            &[],
+            &vec![],
         );
         assert_eq!(result, "de musique rap issus de l' immigration\n");
     }
@@ -452,7 +465,7 @@ mod tests {
             Language::En,
             true,
             false,
-            &[],
+            &vec![],
         );
         assert_eq!(result, "Ich hoffe , daß Sie schöne Ferien hatten .\n");
     }
@@ -476,7 +489,8 @@ mod tests {
         // In English, these would normally be contractions that are separated by default
         let text = "Some text containing the protected pattern $'$ and /'/.";
 
-        let result_without_protected = moses_tokenize_line(text, Language::En, true, false, &[]);
+        let result_without_protected =
+            moses_tokenize_line(text, Language::En, true, false, &vec![]);
         assert_eq!(
             result_without_protected,
             "Some text containing the protected pattern $ ' $ and / ' / .\n"
@@ -487,7 +501,7 @@ mod tests {
             Language::En,
             true,
             false,
-            &[r"([^\p{L}])[']([^\p{L}])"],
+            &vec![Regex::new(r"([^\p{L}])[']([^\p{L}])").unwrap()],
         );
         assert_eq!(
             result_with_protected,
