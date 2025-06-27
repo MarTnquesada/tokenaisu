@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use strum_macros;
 mod nonbreaking_prefixes;
+use rayon::prelude::*;
 use std::sync::LazyLock;
 
 #[derive(Debug, PartialEq, strum_macros::AsRefStr, Clone)]
@@ -80,7 +81,7 @@ pub fn moses_tokenize(
         .iter()
         .map(|t| Regex::new(t).unwrap())
         .collect();
-    text.lines()
+    text.par_lines()
         .map(|line| {
             moses_tokenize_line(
                 line,

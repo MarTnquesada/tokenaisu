@@ -2,7 +2,7 @@
 name = "tokenaisu"
 version = "0.1.0"
 authors = ["Martín Quesada Zaragoza"]
-description = "A bundle of different tokenizer implementations (namely Moses) written in Rust"
+description = "A bundle of different tokenizer implementations written in Rust"
 edition = "2024"
 readme = "README.md"
 repository = "https://github.com/MarTnquesada/tokenaisu"
@@ -11,6 +11,7 @@ keywords = ["tokenizer", "moses"]
 
 [dependencies]
 clap = { version = "4.5.40", features = ["derive"] }
+rayon = "1.10.0"
 regex = "1.11.1"
 strum = "0.27"
 strum_macros = "0.27"
