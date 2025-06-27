@@ -508,7 +508,4 @@ mod tests {
             "Some text containing the protected pattern $'$ and /'/ .\n"
         );
     }
-
-    // TODO expand further with examples from https://github.com/moses-smt/mosesdecoder/blob/master/regression-testing/run-test-detokenizer.perl
-    // (but don't use examples with multi-lines since those are intended for end-to-end tests)
 }

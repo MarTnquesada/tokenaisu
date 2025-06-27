@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
+use tokenaisu::moses::Language;
 
 #[derive(Debug, PartialEq)]
 enum PrefixEntry {

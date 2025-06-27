@@ -1,6 +1,6 @@
 [package]
 name = "tokenaisu"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Martín Quesada Zaragoza"]
 description = "A bundle of different tokenizer implementations written in Rust"
 edition = "2024"
