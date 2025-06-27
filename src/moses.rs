@@ -7,7 +7,7 @@ mod nonbreaking_prefixes;
 use rayon::prelude::*;
 use std::sync::LazyLock;
 
-#[derive(Debug, PartialEq, strum_macros::AsRefStr, Clone)]
+#[derive(Debug, PartialEq, strum_macros::AsRefStr, Clone, clap::ValueEnum)]
 #[strum(serialize_all = "lowercase")]
 pub enum Language {
     As,

@@ -6,6 +6,9 @@ use tokenaisu::moses::{Language, moses_tokenize_file};
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
+    language: Language,
+
+    #[arg(short, long)]
     input_file_path: String,
 
     #[arg(short, long)]
