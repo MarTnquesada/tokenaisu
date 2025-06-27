@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::process;
-use tokenaisu::{Language, moses_tokenize_file};
+use tokenaisu::moses::{Language, moses_tokenize_file};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
