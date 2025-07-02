@@ -139,6 +139,7 @@ pub fn moses_tokenize_line(
         Language::Fi | Language::Sv => {
             // In Finnish and Swedish, the colon can be used inside words as an apostrophe-like character:
             // TODO (applies for all LazyLock regexes) this has some overhead when multithreading because of the read access, cloning the regexes for each thread is technically faster
+            // TODO chain regexes or use alternate intermediate results to pass around Cow<str> between replacing regexes
             static RE_GENERAL: LazyLock<Regex> =
                 LazyLock::new(|| Regex::new(r"([^\p{L}\p{N}\s\.\:\'\`\,\-])").unwrap());
             tokenized_text = RE_GENERAL.replace_all(&tokenized_text, " $1 ").to_string();
